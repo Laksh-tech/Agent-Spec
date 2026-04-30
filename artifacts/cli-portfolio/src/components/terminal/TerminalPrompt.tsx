@@ -1,4 +1,4 @@
-import React, { useRef, useEffect, useState, KeyboardEvent } from 'react';
+import { useRef, useEffect, useState, type KeyboardEvent } from 'react';
 import { getAvailableCommands } from '@/lib/commands';
 
 interface TerminalPromptProps {
@@ -7,29 +7,34 @@ interface TerminalPromptProps {
   onClear: () => void;
   history: string[];
   isAnimating: boolean;
+  label?: string;
+  autocompleteEnabled?: boolean;
 }
 
-export function TerminalPrompt({ onCommand, onCancel, onClear, history, isAnimating }: TerminalPromptProps) {
+export function TerminalPrompt({
+  onCommand,
+  onCancel,
+  onClear,
+  history,
+  isAnimating,
+  label = 'guest@portfolio:~$',
+  autocompleteEnabled = true,
+}: TerminalPromptProps) {
   const [input, setInput] = useState('');
   const [historyIndex, setHistoryIndex] = useState(-1);
   const [savedInput, setSavedInput] = useState('');
   const inputRef = useRef<HTMLInputElement>(null);
 
-  // Focus management
   useEffect(() => {
     const focusInput = () => {
-      // Don't steal focus if user is selecting text
       if (window.getSelection()?.toString() !== '') return;
       inputRef.current?.focus();
     };
-
     document.addEventListener('click', focusInput);
-    focusInput(); // Initial focus
-
+    focusInput();
     return () => document.removeEventListener('click', focusInput);
   }, []);
 
-  // Prevent input while animating
   useEffect(() => {
     if (!isAnimating && inputRef.current) {
       inputRef.current.focus();
@@ -57,10 +62,10 @@ export function TerminalPrompt({ onCommand, onCancel, onClear, history, isAnimat
     }
 
     if (e.key === 'Enter') {
-      if (input.trim()) {
+      if (input.trim() || !autocompleteEnabled) {
         onCommand(input);
       } else {
-        onCancel(); // Just print prompt again if empty
+        onCancel();
       }
       setInput('');
       setHistoryIndex(-1);
@@ -70,12 +75,9 @@ export function TerminalPrompt({ onCommand, onCancel, onClear, history, isAnimat
     if (e.key === 'ArrowUp') {
       e.preventDefault();
       if (history.length === 0) return;
-      
       const nextIndex = historyIndex + 1;
       if (nextIndex < history.length) {
-        if (historyIndex === -1) {
-          setSavedInput(input);
-        }
+        if (historyIndex === -1) setSavedInput(input);
         setHistoryIndex(nextIndex);
         setInput(history[history.length - 1 - nextIndex]);
       }
@@ -95,30 +97,25 @@ export function TerminalPrompt({ onCommand, onCancel, onClear, history, isAnimat
       return;
     }
 
-    if (e.key === 'Tab') {
+    if (e.key === 'Tab' && autocompleteEnabled) {
       e.preventDefault();
       const commands = getAvailableCommands();
       const currentInput = input.trim().toLowerCase();
-      
       if (!currentInput) return;
-
-      const matches = commands.filter(c => c.startsWith(currentInput));
-      
+      const matches = commands.filter((c) => c.startsWith(currentInput));
       if (matches.length === 1) {
         setInput(matches[0] + ' ');
       } else if (matches.length > 1) {
-        // Just command that shows options, wait this breaks the normal input flow.
-        // To be exact to the spec: single match completes; multiple matches print options
-        // But printing options requires adding a log without a full command run.
-        // Let's cheat a bit and submit a special internal command for options or just let user type.
-        onCommand(`_options ${matches.join(' ')}`);
+        onCommand(`_options ${matches.join('  ')}`);
       }
     }
   };
 
   return (
     <div className="flex text-sm sm:text-base font-mono relative mt-1 items-center">
-      <span className="text-emerald-500 font-bold whitespace-pre shrink-0">guest@portfolio:~$ </span>
+      <span className="text-emerald-500 font-bold whitespace-pre shrink-0">
+        {label}{' '}
+      </span>
       <div className="relative flex-1 flex items-center">
         <input
           ref={inputRef}
@@ -128,10 +125,11 @@ export function TerminalPrompt({ onCommand, onCancel, onClear, history, isAnimat
           onKeyDown={handleKeyDown}
           className="w-full bg-transparent outline-none border-none text-transparent caret-transparent font-mono absolute inset-0 z-10"
           autoComplete="off"
-          spellCheck="false"
+          spellCheck={false}
           autoCorrect="off"
           autoCapitalize="off"
           disabled={isAnimating}
+          aria-label="terminal input"
         />
         <div className="pointer-events-none flex whitespace-pre overflow-hidden">
           <span className="text-zinc-200">{input}</span>
