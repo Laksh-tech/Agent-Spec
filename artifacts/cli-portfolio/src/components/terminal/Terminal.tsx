@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
-import { useAuth } from '@workspace/replit-auth-web';
+import { useUser, useClerk } from '@clerk/react';
 import { TerminalHeader } from './TerminalHeader';
 import { TerminalLog } from './TerminalLog';
 import { TerminalPrompt } from './TerminalPrompt';
@@ -22,7 +22,14 @@ interface MessageDraft {
 }
 
 export function Terminal() {
-  const { user, isAuthenticated, login, logout } = useAuth();
+  const { user, isSignedIn } = useUser();
+  const { openSignIn, signOut } = useClerk();
+
+  const isAuthenticated = !!isSignedIn;
+  const userEmail = user?.primaryEmailAddress?.emailAddress ?? null;
+
+  const login = useCallback(() => openSignIn(), [openSignIn]);
+  const logout = useCallback(() => signOut(), [signOut]);
 
   const [logs, setLogs] = useState<CommandOutput[]>([]);
   const [history, setHistory] = useState<string[]>([]);
@@ -134,14 +141,10 @@ export function Terminal() {
           ], false);
         } else {
           appendBlocks('', [
-            {
-              type: 'success',
-              content: `message #${data.id} stored.`,
-            },
+            { type: 'success', content: `message #${data.id} stored.` },
             {
               type: 'hint',
-              content:
-                'note: smtp delivery is offline right now, but your message is safely queued and will reach the owner.',
+              content: 'note: smtp delivery is offline right now, but your message is safely queued.',
             },
           ], false);
         }
@@ -182,7 +185,7 @@ export function Terminal() {
         const email = value === '' || value === '-' ? null : value;
         if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
           appendBlocks('', [
-            { type: 'error', content: "that doesn't look like a valid email. try again or type '-' to skip." },
+            { type: 'error', content: "invalid email. try again or type '-' to skip." },
           ], false);
           return;
         }
@@ -216,11 +219,7 @@ export function Terminal() {
         const cmd = value.toLowerCase();
         if (cmd === 'send' || cmd === 'y' || cmd === 'yes') {
           appendBlocks(`confirm> ${value}`, [], false);
-          const payload = {
-            name: draft.name!,
-            email: draft.email ?? null,
-            body: draft.body!,
-          };
+          const payload = { name: draft.name!, email: draft.email ?? null, body: draft.body! };
           setDraft(null);
           void submitMessage(payload);
           return;
@@ -230,9 +229,7 @@ export function Terminal() {
           setDraft(null);
           return;
         }
-        appendBlocks('', [
-          { type: 'error', content: "please type 'send' or 'cancel'." },
-        ], false);
+        appendBlocks('', [{ type: 'error', content: "type 'send' or 'cancel'." }], false);
       }
     },
     [draft, appendBlocks, submitMessage],
@@ -240,7 +237,6 @@ export function Terminal() {
 
   const onCommand = useCallback(
     (cmd: string) => {
-      // Multi-step message flow takes priority
       if (draft) {
         setHistory((prev) => [...prev, cmd]);
         handleDraftInput(cmd);
@@ -256,10 +252,7 @@ export function Terminal() {
       setHistory((prev) => [...prev, cmd]);
       setLastCommand(cmd);
 
-      const output = handleCommand(cmd, {
-        isAuthenticated,
-        email: user?.email ?? null,
-      });
+      const output = handleCommand(cmd, { isAuthenticated, email: userEmail });
 
       if (output.async === 'inbox') {
         appendLog({ command: cmd, blocks: [{ type: 'text', content: 'fetching inbox...' }] }, false);
@@ -273,23 +266,20 @@ export function Terminal() {
         return;
       }
 
-      // intercept side-effect blocks
       const sideEffect = output.blocks.find(
         (b) => b.type === 'auth-action' || b.type === 'message-start',
       );
-
       const visibleBlocks = output.blocks.filter(
         (b) => b.type !== 'auth-action' && b.type !== 'message-start',
       );
+
       if (visibleBlocks.length > 0 || !sideEffect) {
         appendLog({ command: cmd, blocks: visibleBlocks });
       } else {
-        // ensure command line is echoed
         appendLog({ command: cmd, blocks: [] }, false);
       }
 
       if (sideEffect?.type === 'auth-action') {
-        // small delay so user reads the redirect message
         window.setTimeout(() => {
           if (sideEffect.action === 'login') login();
           else if (sideEffect.action === 'logout') logout();
@@ -299,17 +289,7 @@ export function Terminal() {
         startMessageFlow();
       }
     },
-    [
-      draft,
-      handleDraftInput,
-      appendLog,
-      isAuthenticated,
-      user?.email,
-      runInbox,
-      login,
-      logout,
-      startMessageFlow,
-    ],
+    [draft, handleDraftInput, appendLog, isAuthenticated, userEmail, runInbox, login, logout, startMessageFlow],
   );
 
   const onCancel = useCallback(() => {
@@ -339,23 +319,20 @@ export function Terminal() {
 
   return (
     <div className="flex flex-col h-[100dvh] w-full bg-zinc-950 text-emerald-500 font-mono overflow-hidden selection:bg-emerald-500/30 selection:text-emerald-200">
-      <TerminalHeader sessionEmail={isAuthenticated ? user?.email ?? null : null} />
+      <TerminalHeader sessionEmail={isAuthenticated ? userEmail : null} />
 
       <div ref={scrollRef} className="flex-1 overflow-y-auto p-4 sm:p-6 pb-24">
         <div className="max-w-4xl mx-auto flex flex-col min-h-full">
-          {/* Boot Log */}
           {bootLog.map((line, i) => (
             <div key={`boot-${i}`} className="text-zinc-500 mb-1">
               {line}
             </div>
           ))}
 
-          {/* Initial Hint */}
           {!isBooting && logs.length === 0 && !draft && (
             <div className="text-zinc-600 mb-4 mt-2">{INITIAL_HINT}</div>
           )}
 
-          {/* Command Logs */}
           {!isBooting &&
             logs.map((log, i) => {
               if (log.command.startsWith('_options ')) {
@@ -378,7 +355,6 @@ export function Terminal() {
               );
             })}
 
-          {/* Prompt */}
           {!isBooting && (
             <TerminalPrompt
               onCommand={onCommand}

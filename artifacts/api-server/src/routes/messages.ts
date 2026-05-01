@@ -1,5 +1,6 @@
 import { Router, type IRouter } from "express";
 import { eq, desc } from "drizzle-orm";
+import { requireAuth, getAuth } from "@clerk/express";
 import { CreateMessageBody } from "@workspace/api-zod";
 import { db, messagesTable } from "@workspace/db";
 import { sendVisitorMessage, OWNER_EMAIL } from "../lib/mailer";
@@ -32,12 +33,13 @@ router.post("/messages", async (req, res) => {
   res.status(201).json({ id: row.id, delivered });
 });
 
-router.get("/messages", async (req, res) => {
-  if (!req.isAuthenticated()) {
-    res.status(401).json({ error: "Not authenticated." });
-    return;
-  }
-  if ((req.user.email ?? "").toLowerCase() !== OWNER_EMAIL.toLowerCase()) {
+router.get("/messages", requireAuth(), async (req, res) => {
+  const auth = getAuth(req);
+  const claims = (auth as unknown as { sessionClaims?: Record<string, unknown> })
+    .sessionClaims ?? {};
+  const userEmail = ((claims.email as string) ?? "").toLowerCase();
+
+  if (userEmail !== OWNER_EMAIL.toLowerCase()) {
     res.status(403).json({ error: "Only the portfolio owner can read messages." });
     return;
   }

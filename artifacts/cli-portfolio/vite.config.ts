@@ -50,6 +50,8 @@ export default defineConfig({
     alias: {
       "@": path.resolve(import.meta.dirname, "src"),
       "@assets": path.resolve(import.meta.dirname, "..", "..", "attached_assets"),
+      "react": path.resolve(import.meta.dirname, "../../node_modules/.pnpm/react@19.1.0/node_modules/react"),
+      "react-dom": path.resolve(import.meta.dirname, "../../node_modules/.pnpm/react-dom@19.1.0_react@19.1.0/node_modules/react-dom"),
     },
     dedupe: ["react", "react-dom"],
   },
