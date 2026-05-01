@@ -1,0 +1,45 @@
+services:
+  - type: web
+    name: laksh-portfolio
+    runtime: node
+    plan: free
+    region: oregon
+
+    buildCommand: >
+      npm install -g pnpm &&
+      pnpm install --frozen-lockfile &&
+      BASE_PATH=/ pnpm --filter @workspace/cli-portfolio run build &&
+      pnpm --filter @workspace/api-server run build
+
+    startCommand: node --enable-source-maps artifacts/api-server/dist/index.mjs
+
+    envVars:
+      - key: NODE_ENV
+        value: production
+
+      # Path (relative to repo root) where the built Vite frontend lives.
+      - key: STATIC_DIR
+        value: artifacts/cli-portfolio/dist/public
+
+      # Render injects PORT automatically — no need to set it here.
+
+      # ── Secrets: set these in the Render dashboard ──────────────────────────
+      # Neon Postgres connection string (postgresql://...?sslmode=require)
+      - key: NEON_DATABASE_URL
+        sync: false
+
+      # Clerk backend secret key (sk_live_...)
+      - key: CLERK_SECRET_KEY
+        sync: false
+
+      # Clerk publishable key (pk_live_...) — baked into the frontend at build time
+      - key: VITE_CLERK_PUBLISHABLE_KEY
+        sync: false
+
+      # 16-char Gmail App Password for the `message` command email delivery
+      - key: GMAIL_APP_PASSWORD
+        sync: false
+
+      # Random 32-byte hex string for session cookies (if ever re-added)
+      - key: SESSION_SECRET
+        sync: false
