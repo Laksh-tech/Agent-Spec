@@ -17,7 +17,7 @@ By stripping away the Graphical User Interface (GUI), this application focuses s
 ## 🚀 How to Execute
 This system is configured to run instantly within a Replit container.
 
-1. **Access the Environment:** [Insert Your Replit Link Here]
+1. **Access the Environment:** [https://agent-spec--lakshsk108.replit.app/]
 2. **Initialize:** Click the **Run** button to boot the Node.js execution environment.
 3. **Interact:** Click inside the terminal window and follow the command prompts to navigate the system.
 
